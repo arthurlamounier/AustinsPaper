@@ -1,0 +1,156 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r include=FALSE}
+setwd("/Users/arthu/OneDrive - University of Florida/Desktop/Doc/Aerospace Lab/flammability trials/")
+library(agricolae)
+library(stats)
+library(nlme)
+library(car)
+library(ggplot2)
+library(dplyr)
+library(multcompView)
+library(graphics)
+library(multcomp)
+library(tidyr)
+library(lme4)
+library(stringr)
+library(rstatix)
+library(ggpubr)
+library(ggfortify)
+library(MASS)
+library(factoextra)
+library(RColorBrewer)
+library(viridis)
+library(car)
+library(emmeans)
+library(interactions)
+library(betareg)
+library(survival)
+library(survminer)
+library(MVN)
+library(MASS)
+library(MCMCglmm)
+library(afex)
+library(statmod)
+library(RVAideMemoire)
+library(afex)
+library(broom)
+library(clipr)
+library(magrittr)
+library(MuMIn)
+library(coxme)
+library(cowplot)
+library(gridExtra)
+library(r2glmm)
+```
+
+```{r}
+data <- read.csv("DataTable.csv", header = T)
+data.pca <- read.csv("DataTable_PCA.csv", header = T)
+order_pca <- c("100% Pine", "70% Pine", "60% Pine", "50% Pine", "40% Pine", "30% Pine", "20% Pine", "10% Pine", "100% Oak", "70% Sweetgum","100% Sweetgum")
+data.pca$Category <- factor(data.pca$Category, 
+                                levels = order_pca)
+data.pca <- as.data.frame(data.pca)
+data.pca.sample <- data.pca[-c(1)]
+
+shapiro.test(data$Mass_Loss_Rate)
+ancova_model <- aov(Mass_Loss_Rate ~ Category, data = data)
+Anova(ancova_model, test.statistic = "F")
+TukeyHSD(ancova_model)
+emm <- emmeans(ancova_model, ~ Category)
+emm
+model_means_cld <- cld(object = emm,
+                       adjust = "Bonferroni",
+                       Letters = letters,
+                       reverse=T,
+                       alpha = 0.05)
+
+model_means_cld
+model_means_cld$Category <- factor(model_means_cld$Category, 
+                                levels = order_pca, 
+                                labels = order_pca)
+data.pca <- merge(data.pca, model_means_cld[, c("Category", ".group")], by = "Category")
+
+
+treatment_colors <- c("#8B0000", "#B22222", "#FF0000", "#FF4500", "#FFA500", "#FFD700", "#FFFF00", "#ADD8E6", "#87CEEB", "#4682B4", "#0000FF")
+max_y <- max(data.pca$Mass_Loss_Rate) + 0.0005
+
+p <- ggplot(data.pca, aes(x = Category, y = Mass_Loss_Rate, fill = Category)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#8B0000", "#B22222", "#FF0000", "#FF4500", "#FFA500", "#FFD700", "#FFFF00", "#ADD8E6", "#87CEEB", "#4682B4", "#0000FF")) +
+  labs(x = "Treatment", y = "Mass Loss Rate (g/s)") +
+  labs(fill = "Treatment") +
+  guides(fill = guide_legend(ncol = 2)) +
+  geom_text(data = model_means_cld, aes(x = Category, y = upper.CL+0.0022, label = .group), vjust = -0.5, size=8) +
+  theme(axis.line = element_line(color = "black", size = 0.6),
+        axis.ticks = element_line(color = "black", size = 0.3),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(face = "bold", size = 18),
+    axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(size = 18),
+    panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(size = 14),
+    panel.background = element_blank()
+  ) +
+  ylim(0, max_y)
+
+p
+
+ggsave("boxplot_massloss_labeled.png", p, bg= "white", width = 16, height = 11, dpi = 900)
+
+
+```
+
+```{r}
+pca_result <- prcomp(data.pca.sample, center = TRUE, scale = TRUE)
+summary(pca_result)
+biplot<- fviz_pca_biplot(pca_result, 
+                label = as.character("var"),
+                habillage = data.pca$Category,
+                geom = "point",  # Set the symbols to dots
+                pointsize = 4,
+                labelsize = 5,
+                col.var = "black",
+                legend.title = "Treatments",
+                title = "",
+                palette = c("#8B0000", "#B22222", "#FF0000", "#FF4500", "#FFA500", "#FFD700", "#FFFF00", "#ADD8E6", "#87CEEB", "#4682B4", "#0000FF"),  
+                repel = TRUE,
+                mean.point = FALSE)
+biplot <- biplot + 
+  scale_x_reverse()+
+  scale_y_reverse()+#
+  theme(legend.key.size = unit(1, 'cm'),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 18, face="bold"),
+        panel.grid = element_blank(),  # Remove grid lines
+        axis.title = element_text(size = 18),
+        axis.text = element_text(size = 16),# Increase axes labels font size
+                panel.border = element_rect(color = "black", fill = NA),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  guides(fill = guide_legend(title = "Legend"),
+         color = guide_legend(ncol = 2),
+         shape = guide_legend(ncol = 2),
+           color = guide_legend(title = "Legend"),
+           shape = guide_legend(title = "Legend"))+
+  labs(title = "", x= "PC1 (56.6%)", y= "PC2 (15%)")
+ # stat_ellipse(aes(color = data.pca$Category, 
+                          # level = 0.95))
+  
+
+biplot
+
+ggsave("PCA_firebehavior_labeled.png", biplot, bg= "white", width = 16, height = 11, dpi = 900)
+
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 40))
+
+eig.val <- get_eigenvalue(pca_result)
+eig.val
+
+summary(pca_result)$rotation
+```
+
