@@ -40,6 +40,12 @@ data <- data %>%
     NAE_MLR = Mass_Loss_Rate - expected_mass_loss_rate
   )
 
+test <- as.data.frame(cbind(data$Mass_Loss_Rate, data$expected_mass_loss_rate))
+names(test) <- c("Mass_Loss_Rate", "expected_mass_loss_rate")
+
+t.test(data$Mass_Loss_Rate, data$expected_mass_loss_rate, paired=T)
+
+
 ggplot(data, aes(x = Category)) +
   geom_segment(aes(
     xend = Category,
